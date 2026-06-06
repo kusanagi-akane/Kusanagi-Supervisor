@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+logs/
+tmp*/
+supervisor_config.json
+supervisor_config.json.*.tmp
