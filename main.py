@@ -1,19 +1,20 @@
-import subprocess
-import os
-import sys
-import time
-import signal
-import threading
-import logging
-import re
-import unicodedata
+import contextlib
 import json
-from pathlib import Path
-from datetime import datetime
+import logging
+import os
+import re
+import signal
+import subprocess
+import sys
+import threading
+import time
+import unicodedata
 from collections import deque
+from datetime import datetime
+from pathlib import Path
 
 try:
-    import psutil
+    import psutil  # pyright: ignore[reportMissingModuleSource]
 except ImportError:
     psutil = None
 
@@ -25,19 +26,16 @@ except ImportError:
 def configure_console():
     """Prefer UTF-8 output so the styled Chinese UI renders cleanly on Windows."""
     for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            try:
-                stream.reconfigure(encoding="utf-8", errors="replace")
-            except Exception:
-                pass
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            with contextlib.suppress(OSError, ValueError, AttributeError):
+                reconfigure(encoding="utf-8", errors="replace")
 
     if os.name == "nt":
-        try:
+        with contextlib.suppress(ImportError, AttributeError, OSError):
             import ctypes
             ctypes.windll.kernel32.SetConsoleOutputCP(65001)
             ctypes.windll.kernel32.SetConsoleCP(65001)
-        except Exception:
-            pass
 
 configure_console()
 
@@ -117,7 +115,7 @@ def level_tag(level):
 def term_width():
     try:
         return os.get_terminal_size().columns
-    except:
+    except (OSError, ValueError):
         return 80
 
 def divider(char="─", color=CYAN):
@@ -196,7 +194,6 @@ def copyright_footer():
     print()
 
 def section_header(title, icon="◈"):
-    w = min(term_width(), 60)
     col = rgb(140, 200, 255)
     print(f"\n{col}{BOLD}{icon} {title}{RESET}")
     print(f"{col}{'╌' * (display_width(title) + 4)}{RESET}")
@@ -247,7 +244,7 @@ def get_process_stats(name):
         mem = ps_proc.memory_info().rss / (1024 * 1024)
         cpu = ps_proc.cpu_percent(interval=None)
         return round(cpu, 1), round(mem, 1)
-    except Exception:
+    except (psutil.Error, OSError, AttributeError, ValueError):
         return 0.0, 0.0
 
 # ══════════════════════════════════════════════════════════════
@@ -280,12 +277,12 @@ def date_str():
     return datetime.now().strftime("%Y-%m-%d")
 
 def safe_print(text):
-    global is_prompting
     with state_lock:
         prompting = is_prompting
-    if prompting and readline:
+    redisplay = getattr(readline, "redisplay", None) if readline else None
+    if prompting and callable(redisplay):
         sys.stdout.write(f"\r\033[K{text}\n")
-        readline.redisplay()
+        redisplay()
         sys.stdout.flush()
     else:
         print(text)
@@ -297,7 +294,6 @@ def plog(level, msg, context_name=None):
     ts   = f"{time_col}[{now_str()}]{RESET}"
     name_part = f" {rgb(200,220,255)}{BOLD}[{context_name}]{RESET}" if context_name else ""
     
-    global is_monitoring
     # 如果沒有在即時監控模式，才印出文字，避免破壞自動更新畫面
     if not is_monitoring:
         safe_print(f"{ts} {tag}{name_part}  {msg}")
@@ -364,7 +360,7 @@ def tail_log(name, lines=50):
             decoded = buffer.decode("utf-8", errors="ignore")
             all_lines = decoded.splitlines(keepends=True)
             return all_lines[-lines:]
-    except Exception as e:
+    except (OSError, ValueError) as e:
         return [f"(讀取 log 失敗: {e})\n"]
 
 
@@ -454,7 +450,7 @@ def normalize_configs(data):
     if data is None:
         return {}
     if not isinstance(data, dict):
-        raise ValueError("設定檔根節點必須是 JSON 物件")
+        raise ValueError("設定檔根節點必須是 JSON 物件")  # noqa: TRY004
 
     normalized = {}
     for raw_name, raw_conf in data.items():
@@ -475,17 +471,15 @@ def write_json_atomic(path, data):
         os.replace(tmp_path, path)
     finally:
         if tmp_path.exists():
-            try:
+            with contextlib.suppress(OSError):
                 tmp_path.unlink()
-            except Exception:
-                pass
 
 def load_configs():
     global SCRIPT_CONFIGS
     if not CONFIG_PATH.exists():
         try:
             write_json_atomic(CONFIG_PATH, {})
-        except Exception as e:
+        except OSError as e:
             plog("ERROR", f"無法初始化設定檔 {CONFIG_PATH}：{e}")
     
     try:
@@ -497,7 +491,7 @@ def load_configs():
             for name in SCRIPT_CONFIGS:
                 init_script_state(name)
         return True
-    except Exception as e:
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
         plog("ERROR", f"讀取設定檔失敗：{e}")
         with state_lock:
             if not globals().get("SCRIPT_CONFIGS"):
@@ -513,7 +507,7 @@ def save_configs():
         with state_lock:
             SCRIPT_CONFIGS = data
         return True
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         plog("ERROR", f"儲存設定檔失敗：{e}")
         return False
 
@@ -646,7 +640,7 @@ def listen_log_thread(name):
                 for ln in lines:
                     if ln.strip() != "(尚無 log 紀錄)":
                         print(f"  {GRAY}│{RESET} {format_log_line(ln)}")
-        except Exception as e:
+        except OSError as e:
             plog("ERROR", f"初始化監聽失敗：{e}", name)
 
     sleep_time = 0.5
@@ -661,7 +655,7 @@ def listen_log_thread(name):
         today_date = date_str()
 
         had_data = False
-        try:
+        with contextlib.suppress(OSError):
             if path.exists():
                 stat_result = path.stat()
                 size = stat_result.st_size
@@ -689,8 +683,6 @@ def listen_log_thread(name):
             else:
                 last_size = 0
                 last_file_id = 0
-        except Exception:
-            pass
             
         if had_data:
             sleep_time = 0.01
@@ -728,37 +720,37 @@ def is_restart_limited(name):
 def kill_process_tree(proc):
     """嘗試安全結束進程與其衍生之所有子進程 (Windows/Unix)"""
     pid = proc.pid
-    try:
+    with contextlib.suppress(OSError, ValueError, subprocess.SubprocessError):
         if os.name == "nt":
             # Windows: 傳送 CTRL_BREAK_EVENT 到進程組
-            try:
+            with contextlib.suppress(OSError, ValueError, subprocess.SubprocessError):
                 proc.send_signal(signal.CTRL_BREAK_EVENT)
-            except Exception:
-                pass
             # 輔以 taskkill /T (優雅關閉) 保證樹狀清理
-            subprocess.run(["taskkill", "/T", "/PID", str(pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["taskkill", "/T", "/PID", str(pid)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         else:
             # Unix: 向整個進程組傳送 SIGTERM
-            try:
+            with contextlib.suppress(OSError, ProcessLookupError):
                 os.killpg(os.getpgid(pid), signal.SIGTERM)
-            except Exception:
-                pass
-    except Exception:
-        pass
 
 def force_kill_process_tree(proc):
     """強行終止進程與其衍生之所有子進程"""
     pid = proc.pid
-    try:
+    with contextlib.suppress(OSError, ValueError, subprocess.SubprocessError):
         if os.name == "nt":
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         else:
-            try:
+            with contextlib.suppress(OSError, ProcessLookupError):
                 os.killpg(os.getpgid(pid), signal.SIGKILL)
-            except Exception:
-                pass
-    except Exception:
-        pass
 
 # ══════════════════════════════════════════════════════════════
 #  SCRIPT CONTROL
@@ -801,9 +793,10 @@ def start_script(name):
             plog("ERROR", f"執行檔不存在：{script_file}", name)
             return None
 
+    log_fp = None
     try:
         rotate_logs(name)
-        log_fp = open(get_log_path(name), "a", encoding="utf-8", buffering=1)
+        log_fp = open(get_log_path(name), "a", encoding="utf-8", buffering=1)  # noqa: SIM115
 
         # 寫入啟動分隔線到 log 檔
         log_fp.write(f"\n{'='*60}\n")
@@ -818,31 +811,35 @@ def start_script(name):
             for k, v in custom_env.items():
                 env[str(k)] = str(v)
 
-        kwargs = dict(
-            cwd=str(script_dir),
-            stdout=log_fp,
-            stderr=log_fp,
-            env=env,
-        )
-        if os.name == "nt":
-            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        else:
-            kwargs["preexec_fn"] = os.setsid
-
         # 執行指令
         cmd = [sys.executable, "-u", str(script_file)]
         cmd.extend(conf.get("args", []))
 
-        proc = subprocess.Popen(cmd, **kwargs)
+        if os.name == "nt":
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(script_dir),
+                stdout=log_fp,
+                stderr=log_fp,
+                env=env,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+        else:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(script_dir),
+                stdout=log_fp,
+                stderr=log_fp,
+                env=env,
+                start_new_session=True,
+            )
         with state_lock:
             # 預熱 psutil Process 物件
             ps_proc = None
             if psutil is not None:
-                try:
+                with contextlib.suppress(psutil.Error, OSError, ValueError):
                     ps_proc = psutil.Process(proc.pid)
-                    ps_proc.cpu_percent(interval=None) # 預熱
-                except Exception:
-                    pass
+                    ps_proc.cpu_percent(interval=None)  # 預熱
             script_processes[name] = {
                 "process":    proc,
                 "log_fp":     log_fp,
@@ -856,12 +853,12 @@ def start_script(name):
         plog("START", f"啟動 {BOLD}{name}{RESET}  {GRAY}PID {proc.pid}{RESET}", name)
         return proc
 
-    except Exception as e:
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
         plog("ERROR", f"啟動失敗：{e}", name)
         with state_lock:
             init_script_state(name)
             script_states[name]["status"] = "STOPPED"
-        if 'log_fp' in locals() and not log_fp.closed:
+        if log_fp is not None and not log_fp.closed:
             log_fp.close()
         return None
 
@@ -902,10 +899,8 @@ def stop_script(name):
             force_kill_process_tree(proc)
             proc.wait()
 
-        try:
+        with contextlib.suppress(OSError, ValueError):
             entry["log_fp"].close()
-        except Exception:
-            pass
 
         with state_lock:
             script_processes.pop(name, None)
@@ -918,7 +913,7 @@ def stop_script(name):
         plog("OK", f"{BOLD}{name}{RESET} 已停止  {GRAY}(運行了 {uptime}){RESET}", name)
         return True
 
-    except Exception as e:
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
         plog("ERROR", f"停止 {name} 失敗：{e}", name)
         with state_lock:
             if proc.poll() is None:
@@ -983,7 +978,6 @@ def status():
         with state_lock:
             init_script_state(name)
             state_info = script_states[name]
-            entry = script_processes.get(name)
         
         status_now = state_info["status"]
         enabled = conf.get("enabled", True)
@@ -1084,6 +1078,19 @@ def print_help():
 
 PROMPT = f"\n{rgb(200,150,255)}{BOLD}❯{RESET} "
 
+def _monitor_loop():
+    while is_monitoring and running:
+        print("\033[H\033[J", end="")
+        print_banner()
+        status()
+
+        w = min(term_width(), 72)
+        msg = "● 即時監控模式運行中... (按下 Enter 退出)"
+        print(center_text(f"{rgb(100,255,160)}{BOLD}{msg}{RESET}", w))
+        print()
+
+        time.sleep(1)
+
 def console_listener():
     global running, is_monitoring, is_prompting
     while True:
@@ -1125,27 +1132,13 @@ def console_listener():
         elif cmd == "monitor":
             is_monitoring = True
             clear_screen()
-            
-            def monitor_loop():
-                while is_monitoring and running:
-                    print("\033[H\033[J", end="")
-                    print_banner()
-                    status()
-                    
-                    w = min(term_width(), 72)
-                    msg = "● 即時監控模式運行中... (按下 Enter 退出)"
-                    print(center_text(f"{rgb(100,255,160)}{BOLD}{msg}{RESET}", w))
-                    print()
-                    
-                    time.sleep(1)
-                    
-            mt = threading.Thread(target=monitor_loop, daemon=True)
+
+            mt = threading.Thread(target=_monitor_loop, daemon=True)
             mt.start()
-            
+
             try:
-                input() 
-            except:
-                pass
+                with contextlib.suppress(EOFError, KeyboardInterrupt, OSError):
+                    input()
             finally:
                 is_monitoring = False
                 time.sleep(0.1)
@@ -1271,13 +1264,13 @@ def console_listener():
                 stop_script(script_name)
             
             with state_lock:
-                if script_name in SCRIPT_CONFIGS: del SCRIPT_CONFIGS[script_name]
-                if script_name in script_processes: del script_processes[script_name]
-                if script_name in restart_history: del restart_history[script_name]
-                if script_name in log_listeners: del log_listeners[script_name]
-                if script_name in listener_threads: del listener_threads[script_name]
-                if script_name in manual_stop: del manual_stop[script_name]
-                if script_name in script_states: del script_states[script_name]
+                SCRIPT_CONFIGS.pop(script_name, None)
+                script_processes.pop(script_name, None)
+                restart_history.pop(script_name, None)
+                log_listeners.pop(script_name, None)
+                listener_threads.pop(script_name, None)
+                manual_stop.pop(script_name, None)
+                script_states.pop(script_name, None)
             save_configs()
             plog("OK", f"成功刪除腳本設定：{script_name}")
 
@@ -1347,13 +1340,11 @@ def graceful_shutdown():
 
 def watchdog():
     """監控所有腳本崩潰並自動重啟，以及偵測設定熱更新。"""
-    global running, config_last_mtime
+    global config_last_mtime
     
-    try:
+    with contextlib.suppress(OSError):
         if CONFIG_PATH.exists():
             config_last_mtime = CONFIG_PATH.stat().st_mtime
-    except Exception:
-        pass
 
     while running:
         time.sleep(2)
@@ -1379,8 +1370,7 @@ def watchdog():
                         plog("SYS", f"設定已移除腳本：{name}，正在停止進程...", name)
                         stop_script(name)
                         with state_lock:
-                            if name in script_states:
-                                del script_states[name]
+                            script_states.pop(name, None)
                                 
                     for name in new_scripts:
                         with state_lock:
@@ -1398,7 +1388,7 @@ def watchdog():
                             if not is_manual:
                                 plog("SYS", f"腳本 {name} 已在設定檔中被啟用，正在初始化啟動...", name)
                                 start_script(name)
-        except Exception as e:
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError) as e:
             plog("ERROR", f"熱重載設定檔失敗：{e}")
 
         # 2. 崩潰偵測與重啟
@@ -1432,10 +1422,8 @@ def watchdog():
                 if exit_code != 0:
                     state_info["crash_count"] += 1
 
-            try:
+            with contextlib.suppress(OSError, ValueError):
                 entry["log_fp"].close()
-            except Exception:
-                pass
 
             with state_lock:
                 was_manual_stop = manual_stop.get(name, False)
@@ -1452,13 +1440,12 @@ def watchdog():
                 conf = SCRIPT_CONFIGS.get(name)
                 auto_restart = conf.get("auto_restart", True) if conf else True
                 
-            if auto_restart:
-                if not is_restart_limited(name):
-                    plog("RESTART", f"自動重啟 {BOLD}{name}{RESET}…", name)
-                    time.sleep(1)
-                    with state_lock:
-                        script_states[name]["restart_count"] += 1
-                    start_script(name)
+            if auto_restart and not is_restart_limited(name):
+                plog("RESTART", f"自動重啟 {BOLD}{name}{RESET}…", name)
+                time.sleep(1)
+                with state_lock:
+                    script_states[name]["restart_count"] += 1
+                start_script(name)
 
 # ══════════════════════════════════════════════════════════════
 #  MAIN
