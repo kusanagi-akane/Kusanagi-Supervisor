@@ -100,8 +100,33 @@ Run these commands inside the Kusanagi Supervisor prompt.
 - `enable <name>`: Enable a script profile
 - `disable <name>`: Disable a script profile
 - `config`: Show all script profile details
+- `lang`: Show the current UI language and available languages
+- `lang <code>`: Switch the UI language at runtime, e.g. `lang en` or `lang zh_TW`
 - `clear`: Clear the terminal
 - `exit`: Stop all scripts gracefully and exit
+
+## Languages
+
+Kusanagi Supervisor ships with English (`en`) and Traditional Chinese (`zh_TW`). The default UI language is English.
+
+The UI language is chosen in this order:
+
+1. `--lang <code>` command-line argument, e.g. `python main.py --lang zh_TW`
+2. `KUSANAGI_LANG` environment variable
+3. Default: `en`
+
+You can also switch at runtime with `lang <code>`.
+
+Supervisor log files under `logs/supervisor/` are always written in English so they stay easy to search and share in issue reports.
+
+### Adding a Translation
+
+1. Copy `locales/en.json` to `locales/<code>.json`, for example `locales/ja.json`.
+2. Translate the values. Keep every key and every `{placeholder}` unchanged.
+3. Update `_meta.name`, and optionally `_meta.true_words` / `_meta.false_words` (extra yes/no words accepted in config values).
+4. Run the tests. `tests/test_i18n.py` checks for missing keys and mismatched placeholders.
+
+Missing keys fall back to English automatically.
 
 ## Logs
 
@@ -140,6 +165,7 @@ python -B -m unittest discover -s tests
 ## Project Structure
 
 - `main.py`: Kusanagi Supervisor
+- `locales/`: UI translation files (`en.json`, `zh_TW.json`)
 - `supervisor_config.json`: Runtime configuration file, created on first run
 - `logs/`: Runtime log directory
 - `requirements.txt`: Python dependencies
