@@ -23,8 +23,9 @@ try:
 except ImportError:
     readline = None
 
+
 def configure_console():
-    """Prefer UTF-8 output so the styled Chinese UI renders cleanly on Windows."""
+    """Configure UTF-8 console encoding for standard streams and Windows code pages."""
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if callable(reconfigure):
@@ -37,19 +38,16 @@ def configure_console():
             ctypes.windll.kernel32.SetConsoleOutputCP(65001)
             ctypes.windll.kernel32.SetConsoleCP(65001)
 
+
 configure_console()
 
-# ══════════════════════════════════════════════════════════════
-#  ANSI COLORS & STYLES
-# ══════════════════════════════════════════════════════════════
-
+# ANSI escape codes for terminal styling
 RESET   = "\033[0m"
 BOLD    = "\033[1m"
 DIM     = "\033[2m"
 ITALIC  = "\033[3m"
 ULINE   = "\033[4m"
 
-# 前景
 BLACK   = "\033[30m"
 RED     = "\033[91m"
 GREEN   = "\033[92m"
@@ -60,21 +58,23 @@ CYAN    = "\033[96m"
 WHITE   = "\033[97m"
 GRAY    = "\033[90m"
 
-# 背景
 BG_BLACK  = "\033[40m"
 BG_RED    = "\033[41m"
 BG_GREEN  = "\033[42m"
 BG_BLUE   = "\033[44m"
 BG_CYAN   = "\033[46m"
 
+
 def rgb(r, g, b):
     return f"\033[38;2;{r};{g};{b}m"
+
 
 def bg_rgb(r, g, b):
     return f"\033[48;2;{r};{g};{b}m"
 
+
 def gradient_text(text, start_rgb, end_rgb):
-    """平滑漸層文字"""
+    """Render text with a linear RGB color gradient."""
     sr, sg, sb = start_rgb
     er, eg, eb = end_rgb
     result = ""
@@ -86,9 +86,6 @@ def gradient_text(text, start_rgb, end_rgb):
         result += f"{rgb(r,g,b)}{ch}"
     return result + RESET
 
-# ══════════════════════════════════════════════════════════════
-#  LOG LEVEL COLORS
-# ══════════════════════════════════════════════════════════════
 
 LEVEL_STYLES = {
     "INFO":    (rgb(100, 220, 255),  "ℹ"),
@@ -104,13 +101,11 @@ LEVEL_STYLES = {
     "SYS":     (rgb(200, 150, 255),  "⚙"),
 }
 
+
 def level_tag(level):
     color, icon = LEVEL_STYLES.get(level.upper(), (GRAY, "•"))
     return f"{color}{BOLD}{icon} {level:<7}{RESET}"
 
-# ══════════════════════════════════════════════════════════════
-#  TERMINAL WIDTH & ALIGNMENT
-# ══════════════════════════════════════════════════════════════
 
 def term_width():
     try:
@@ -118,26 +113,29 @@ def term_width():
     except (OSError, ValueError):
         return 80
 
+
 def divider(char="─", color=CYAN):
     w = min(term_width(), 60)
     return f"{color}{char * w}{RESET}"
 
+
 def display_width(text):
-    """計算字串在終端機中的實際顯示寬度（處理中文字、全形字元與 ANSI 色碼）"""
+    """Calculate terminal column width accounting for East Asian wide characters and ANSI codes."""
     raw_text = re.sub(r'\033\[[^m]*m', '', text)
     width = 0
     for char in raw_text:
-        # F: Fullwidth, W: Wide
         if unicodedata.east_asian_width(char) in ('F', 'W'):
             width += 2
         else:
             width += 1
     return width
 
+
 def align_text(text, target_width):
-    """用空白將字串補齊到指定顯示寬度"""
+    """Pad text with trailing spaces to match the target terminal display width."""
     tw = display_width(text)
     return text + " " * max(0, target_width - tw)
+
 
 def center_text(text, width=None, fill=" "):
     w = width or min(term_width(), 60)
@@ -145,16 +143,15 @@ def center_text(text, width=None, fill=" "):
     pad = max(0, (w - tw) // 2)
     return fill * pad + text
 
-# ══════════════════════════════════════════════════════════════
-#  BANNER & UI
-# ══════════════════════════════════════════════════════════════
 
 PROJECT_NAME = "Kusanagi Supervisor"
 VERSION = "v2.0.0"
 AUTHOR  = "Kusanagi_Akane"
 
+
 def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
+
 
 def print_banner():
     w = min(term_width(), 60)
@@ -164,7 +161,6 @@ def print_banner():
     print(f"{border}{BOLD}╔{'═' * (w-2)}╗{RESET}")
     print(f"{border}{BOLD}║{RESET}{' ' * (w-2)}{border}{BOLD}║{RESET}")
 
-    # 漸層標題
     title = gradient_text(f"  ✦  {PROJECT_NAME}  ✦  ", (220, 120, 255), (120, 200, 255))
     raw_title = f"  ✦  {PROJECT_NAME}  ✦  "
     tw = display_width(raw_title)
@@ -172,7 +168,6 @@ def print_banner():
     pad_r = w - 2 - tw - pad_l
     print(f"{border}{BOLD}║{RESET}{' ' * pad_l}{BOLD}{title}{RESET}{' ' * pad_r}{border}{BOLD}║{RESET}")
 
-    # 版本行
     ver_line = gradient_text(f"  {VERSION}  ·  Made by {AUTHOR}  ", (150, 200, 255), (200, 150, 255))
     raw_ver  = f"  {VERSION}  ·  Made by {AUTHOR}  "
     vw = display_width(raw_ver)
@@ -184,6 +179,7 @@ def print_banner():
     print(f"{border}{BOLD}╚{'═' * (w-2)}╝{RESET}")
     print()
 
+
 def copyright_footer():
     w = min(term_width(), 50)
     c = rgb(255, 150, 220)
@@ -193,32 +189,32 @@ def copyright_footer():
     print(f"{c}{'─' * w}{RESET}")
     print()
 
+
 def section_header(title, icon="◈"):
     col = rgb(140, 200, 255)
     print(f"\n{col}{BOLD}{icon} {title}{RESET}")
     print(f"{col}{'╌' * (display_width(title) + 4)}{RESET}")
 
-# ══════════════════════════════════════════════════════════════
-#  STATE
-# ══════════════════════════════════════════════════════════════
 
-script_processes = {}     # name -> {"process": Popen, "log_fp": FileObject, "start_time": float}
-script_states    = {}     # name -> {"status": str, "pid": int/None, "restart_count": int, "crash_count": int, "last_exit_code": int/None, "start_time": float/None}
-restart_history = {}      # name -> deque of timestamps
-log_listeners   = {}      # name -> bool
-listener_threads= {}      # name -> Thread
-manual_stop     = {}      # name -> bool
-running         = True
-is_monitoring   = False   # 控制是否在 Monitor (即時更新) 模式中
-state_lock       = threading.RLock()
-config_last_mtime = 0.0   # 追蹤設定檔修改時間
-is_prompting    = False
+# Global runtime state protected by state_lock
+script_processes  = {}
+script_states     = {}
+restart_history   = {}
+log_listeners     = {}
+listener_threads  = {}
+manual_stop       = {}
+running           = True
+is_monitoring     = False
+state_lock        = threading.RLock()
+config_last_mtime = 0.0
+is_prompting      = False
 
 RESTART_LIMIT  = 5
-RESTART_WINDOW = 60       # 秒
+RESTART_WINDOW = 60
+
 
 def init_script_state(name):
-    """初始化或重設腳本狀態機的狀態屬性。"""
+    """Initialize default state tracking entry for a script if not present."""
     if name not in script_states:
         script_states[name] = {
             "status": "STOPPED",
@@ -229,8 +225,9 @@ def init_script_state(name):
             "start_time": None
         }
 
+
 def get_process_stats(name):
-    """讀取進程的 CPU% 與記憶體 (MB)"""
+    """Return (cpu_percent, memory_mb) for a running script process."""
     with state_lock:
         entry = script_processes.get(name)
         if not entry:
@@ -247,16 +244,12 @@ def get_process_stats(name):
     except (psutil.Error, OSError, AttributeError, ValueError):
         return 0.0, 0.0
 
-# ══════════════════════════════════════════════════════════════
-#  LOGGING SYSTEM
-# ══════════════════════════════════════════════════════════════
 
-MAX_LOG_SIZE   = 5 * 1024 * 1024   # 5 MB
-LOG_KEEP       = 7                  # 保留最多 7 份輪替
-LOG_BASE       = Path(__file__).parent / "logs"
+MAX_LOG_SIZE = 5 * 1024 * 1024
+LOG_KEEP     = 7
+LOG_BASE     = Path(__file__).parent / "logs"
 LOG_BASE.mkdir(exist_ok=True)
 
-# 建立 Python logger（Supervisor 自身的 log）
 _supervisor_log_path = LOG_BASE / "supervisor" / (datetime.now().strftime("%Y-%m-%d") + ".log")
 _supervisor_log_path.parent.mkdir(exist_ok=True)
 
@@ -273,10 +266,13 @@ supervisor_logger.addHandler(_file_handler)
 def now_str():
     return datetime.now().strftime("%H:%M:%S")
 
+
 def date_str():
     return datetime.now().strftime("%Y-%m-%d")
 
+
 def safe_print(text):
+    """Print a line to stdout without corrupting an active readline prompt."""
     with state_lock:
         prompting = is_prompting
     redisplay = getattr(readline, "redisplay", None) if readline else None
@@ -287,18 +283,17 @@ def safe_print(text):
     else:
         print(text)
 
+
 def plog(level, msg, context_name=None):
-    """Supervisor 輸出（終端 + 寫檔）"""
+    """Log a message to both the terminal (unless in monitor mode) and the supervisor log file."""
     tag  = level_tag(level)
     time_col = GRAY
     ts   = f"{time_col}[{now_str()}]{RESET}"
     name_part = f" {rgb(200,220,255)}{BOLD}[{context_name}]{RESET}" if context_name else ""
-    
-    # 如果沒有在即時監控模式，才印出文字，避免破壞自動更新畫面
+
     if not is_monitoring:
         safe_print(f"{ts} {tag}{name_part}  {msg}")
 
-    # 也寫入 supervisor log（純文字）
     raw = re.sub(r'\033\[[^m]*m', '', msg)
     lvl_map = {
         "INFO": logging.INFO, "OK": logging.INFO,
@@ -319,7 +314,7 @@ def get_log_path(name):
 
 
 def rotate_logs(name):
-    """超過 MAX_LOG_SIZE 時輪替"""
+    """Rotate the current script log file if it exceeds MAX_LOG_SIZE."""
     p = get_log_path(name)
     if not p.exists() or p.stat().st_size < MAX_LOG_SIZE:
         return
@@ -334,21 +329,21 @@ def rotate_logs(name):
 
 
 def tail_log(name, lines=50):
+    """Read the last N lines of a script's log file using reverse block seeks."""
     p = get_log_path(name)
     if not p.exists():
         return ["(尚無 log 紀錄)\n"]
-    
+
     try:
-        # 使用二進位倒序 seek 讀取法，即使檔案超大也不會撐爆記憶體
         with open(p, "rb") as f:
             f.seek(0, os.SEEK_END)
             file_size = f.tell()
-            
+
             buffer = bytearray()
             block_size = 4096
             lines_found = 0
             pos = file_size
-            
+
             while pos > 0 and lines_found <= lines:
                 read_size = min(block_size, pos)
                 pos -= read_size
@@ -356,7 +351,7 @@ def tail_log(name, lines=50):
                 chunk = f.read(read_size)
                 buffer[:0] = chunk
                 lines_found = buffer.count(b'\n')
-                
+
             decoded = buffer.decode("utf-8", errors="ignore")
             all_lines = decoded.splitlines(keepends=True)
             return all_lines[-lines:]
@@ -365,7 +360,7 @@ def tail_log(name, lines=50):
 
 
 def format_log_line(line):
-    """為終端輸出著色 log 行"""
+    """Colorize a log line based on severity keywords."""
     line = line.rstrip()
     low = line.lower()
     if any(k in low for k in ["error", "exception", "traceback", "failed"]):
@@ -379,9 +374,6 @@ def format_log_line(line):
     else:
         return f"{rgb(210,210,210)}{line}{RESET}"
 
-# ══════════════════════════════════════════════════════════════
-#  SCRIPT CONFIG
-# ══════════════════════════════════════════════════════════════
 
 CONFIG_PATH = Path(__file__).parent / "supervisor_config.json"
 SCRIPT_CONFIGS = {}
@@ -397,11 +389,13 @@ DEFAULT_SCRIPT_CONFIG = {
 TRUE_VALUES = {"1", "true", "yes", "y", "on", "是", "啟用"}
 FALSE_VALUES = {"0", "false", "no", "n", "off", "否", "停用"}
 
+
 def resolve_path(p):
     path = Path(p)
     if path.is_absolute():
         return path
     return Path(__file__).parent / path
+
 
 def coerce_bool(value, default):
     if isinstance(value, bool):
@@ -414,7 +408,9 @@ def coerce_bool(value, default):
             return False
     return default
 
+
 def normalize_script_config(name, conf):
+    """Validate and normalize a single script configuration dictionary."""
     if not isinstance(conf, dict):
         plog("WARN", f"{name} 設定不是 JSON 物件，已套用預設值", name)
         conf = {}
@@ -446,7 +442,9 @@ def normalize_script_config(name, conf):
 
     return normalized
 
+
 def normalize_configs(data):
+    """Normalize the full configuration mapping loaded from JSON."""
     if data is None:
         return {}
     if not isinstance(data, dict):
@@ -461,7 +459,9 @@ def normalize_configs(data):
         normalized[name] = normalize_script_config(name, raw_conf)
     return normalized
 
+
 def write_json_atomic(path, data):
+    """Write JSON data to a temporary file and atomically replace the target file."""
     path.parent.mkdir(exist_ok=True)
     tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
@@ -474,6 +474,7 @@ def write_json_atomic(path, data):
             with contextlib.suppress(OSError):
                 tmp_path.unlink()
 
+
 def load_configs():
     global SCRIPT_CONFIGS
     if not CONFIG_PATH.exists():
@@ -481,7 +482,7 @@ def load_configs():
             write_json_atomic(CONFIG_PATH, {})
         except OSError as e:
             plog("ERROR", f"無法初始化設定檔 {CONFIG_PATH}：{e}")
-    
+
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -498,6 +499,7 @@ def load_configs():
                 SCRIPT_CONFIGS = {}
         return False
 
+
 def save_configs():
     global SCRIPT_CONFIGS
     try:
@@ -511,6 +513,7 @@ def save_configs():
         plog("ERROR", f"儲存設定檔失敗：{e}")
         return False
 
+
 def interactive_add():
     print(f"\n{rgb(140, 200, 255)}{BOLD}✦ 新增腳本設定 ✦{RESET}")
     try:
@@ -523,23 +526,23 @@ def interactive_add():
         if exists:
             print("此名稱已存在！")
             return
-        
+
         path = input("輸入腳本工作目錄 (可為相對或絕對路徑): ").strip()
         if not path:
             print("路徑不可為空！")
             return
-        
+
         filename = input("輸入執行檔案名稱 (預設: main.py): ").strip() or "main.py"
-        
+
         enabled_input = input("是否預設啟用？ (y/n, 預設: y): ").strip().lower()
         enabled = enabled_input != 'n'
-        
+
         autorestart_input = input("當機是否自動重啟？ (y/n, 預設: y): ").strip().lower()
         auto_restart = autorestart_input != 'n'
-        
+
         args_input = input("自訂執行參數 (選填，空格分隔): ").strip()
         args = args_input.split() if args_input else []
-        
+
         env_input = input("自訂環境變數 (選填，格式: KEY1=VAL1,KEY2=VAL2): ").strip()
         env = {}
         if env_input:
@@ -547,7 +550,7 @@ def interactive_add():
                 if '=' in pair:
                     k, v = pair.split('=', 1)
                     env[k.strip()] = v.strip()
-        
+
         with state_lock:
             SCRIPT_CONFIGS[name] = {
                 "path": path,
@@ -563,35 +566,36 @@ def interactive_add():
     except (KeyboardInterrupt, EOFError):
         print("\n已取消新增。")
 
+
 def interactive_edit(name):
     with state_lock:
         exists = name in SCRIPT_CONFIGS
     if not exists:
         plog("ERROR", f"找不到腳本設定：{name}")
         return
-    
+
     print(f"\n{rgb(140, 200, 255)}{BOLD}✦ 編輯腳本設定：{name} ✦{RESET}")
     print("直接按下 Enter 代表保留原設定。")
-    
+
     with state_lock:
         conf = SCRIPT_CONFIGS[name].copy()
-        
+
     try:
         new_path = input(f"目錄路徑 ({conf['path']}): ").strip() or conf['path']
         new_file = input(f"執行檔案 ({conf['file']}): ").strip() or conf['file']
-        
+
         enabled_str = "y" if conf['enabled'] else "n"
         new_enabled_input = input(f"是否啟用？ (y/n, 目前: {enabled_str}): ").strip().lower()
         new_enabled = conf['enabled'] if not new_enabled_input else (new_enabled_input != 'n')
-        
+
         autorestart_str = "y" if conf['auto_restart'] else "n"
         new_autorestart_input = input(f"是否自動重啟？ (y/n, 目前: {autorestart_str}): ").strip().lower()
         new_autorestart = conf['auto_restart'] if not new_autorestart_input else (new_autorestart_input != 'n')
-        
+
         args_str = " ".join(conf['args'])
         new_args_input = input(f"自訂參數 ({args_str}): ").strip()
         new_args = conf['args'] if not new_args_input else new_args_input.split()
-        
+
         env_str = ",".join(f"{k}={v}" for k, v in conf['env'].items())
         new_env_input = input(f"自訂環境變數 ({env_str}): ").strip()
         new_env = conf['env']
@@ -601,7 +605,7 @@ def interactive_edit(name):
                 if '=' in pair:
                     k, v = pair.split('=', 1)
                     new_env[k.strip()] = v.strip()
-        
+
         with state_lock:
             SCRIPT_CONFIGS[name] = {
                 "path": new_path,
@@ -618,11 +622,9 @@ def interactive_edit(name):
     except (KeyboardInterrupt, EOFError):
         print("\n已取消編輯。")
 
-# ══════════════════════════════════════════════════════════════
-#  LIVE LOG LISTENER
-# ══════════════════════════════════════════════════════════════
 
 def listen_log_thread(name):
+    """Stream new log lines for a script to the console in real time."""
     current_date = date_str()
     plog("INFO", f"開始監聽 {BOLD}{name}{RESET} 的 log（輸入 {CYAN}listen {name} off{RESET} 停止）", name)
 
@@ -634,7 +636,6 @@ def listen_log_thread(name):
             stat_result = path.stat()
             last_size = stat_result.st_size
             last_file_id = stat_result.st_ino if os.name != "nt" else stat_result.st_ctime
-            # 先印出最後 10 行作為 context
             lines = tail_log(name, 10)
             if lines and not is_monitoring:
                 for ln in lines:
@@ -661,7 +662,7 @@ def listen_log_thread(name):
                 size = stat_result.st_size
                 file_id = stat_result.st_ino if os.name != "nt" else stat_result.st_ctime
 
-                # 當換日時，或者檔案被重新建立/輪替時，重置讀取指標
+                # Reset read offset on date rollover, log rotation, or file truncation
                 if today_date != current_date or file_id != last_file_id or size < last_size:
                     last_size = 0
                     current_date = today_date
@@ -674,7 +675,6 @@ def listen_log_thread(name):
                     if chunk:
                         had_data = True
                         new_content = chunk.decode("utf-8", errors="ignore")
-                        # 只有不在監控模式時才印出
                         if not is_monitoring and new_content.strip():
                             for ln in new_content.splitlines():
                                 safe_print(f"  {GRAY}│{RESET} {format_log_line(ln)}")
@@ -683,27 +683,24 @@ def listen_log_thread(name):
             else:
                 last_size = 0
                 last_file_id = 0
-            
+
         if had_data:
             sleep_time = 0.01
         else:
             sleep_time = min(0.5, sleep_time + 0.1)
-            
+
         time.sleep(sleep_time)
 
     plog("STOP", f"已停止監聽 {name}", name)
     with state_lock:
         listener_threads.pop(name, None)
 
-# ══════════════════════════════════════════════════════════════
-#  RESTART LIMIT
-# ══════════════════════════════════════════════════════════════
 
 def is_restart_limited(name):
+    """Check whether a script has exceeded RESTART_LIMIT within RESTART_WINDOW."""
     now  = time.time()
     with state_lock:
         hist = restart_history.setdefault(name, deque())
-        # 清除過期記錄
         while hist and now - hist[0] > RESTART_WINDOW:
             hist.popleft()
 
@@ -717,15 +714,14 @@ def is_restart_limited(name):
 
     return False
 
+
 def kill_process_tree(proc):
-    """嘗試安全結束進程與其衍生之所有子進程 (Windows/Unix)"""
+    """Gracefully terminate a process and all of its child processes."""
     pid = proc.pid
     with contextlib.suppress(OSError, ValueError, subprocess.SubprocessError):
         if os.name == "nt":
-            # Windows: 傳送 CTRL_BREAK_EVENT 到進程組
             with contextlib.suppress(OSError, ValueError, subprocess.SubprocessError):
                 proc.send_signal(signal.CTRL_BREAK_EVENT)
-            # 輔以 taskkill /T (優雅關閉) 保證樹狀清理
             subprocess.run(
                 ["taskkill", "/T", "/PID", str(pid)],
                 check=False,
@@ -733,12 +729,12 @@ def kill_process_tree(proc):
                 stderr=subprocess.DEVNULL,
             )
         else:
-            # Unix: 向整個進程組傳送 SIGTERM
             with contextlib.suppress(OSError, ProcessLookupError):
                 os.killpg(os.getpgid(pid), signal.SIGTERM)
 
+
 def force_kill_process_tree(proc):
-    """強行終止進程與其衍生之所有子進程"""
+    """Forcefully kill a process and all of its child processes."""
     pid = proc.pid
     with contextlib.suppress(OSError, ValueError, subprocess.SubprocessError):
         if os.name == "nt":
@@ -752,11 +748,9 @@ def force_kill_process_tree(proc):
             with contextlib.suppress(OSError, ProcessLookupError):
                 os.killpg(os.getpgid(pid), signal.SIGKILL)
 
-# ══════════════════════════════════════════════════════════════
-#  SCRIPT CONTROL
-# ══════════════════════════════════════════════════════════════
 
 def start_script(name):
+    """Launch a configured script in its own process group and attach log output."""
     with state_lock:
         manual_stop[name] = False
         conf = SCRIPT_CONFIGS.get(name)
@@ -798,20 +792,17 @@ def start_script(name):
         rotate_logs(name)
         log_fp = open(get_log_path(name), "a", encoding="utf-8", buffering=1)  # noqa: SIM115
 
-        # 寫入啟動分隔線到 log 檔
         log_fp.write(f"\n{'='*60}\n")
         log_fp.write(f"  Script 啟動  ·  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         log_fp.write(f"{'='*60}\n\n")
         log_fp.flush()
 
-        # 合併環境變數
         env = os.environ.copy()
         custom_env = conf.get("env", {})
         if custom_env:
             for k, v in custom_env.items():
                 env[str(k)] = str(v)
 
-        # 執行指令
         cmd = [sys.executable, "-u", str(script_file)]
         cmd.extend(conf.get("args", []))
 
@@ -834,12 +825,12 @@ def start_script(name):
                 start_new_session=True,
             )
         with state_lock:
-            # 預熱 psutil Process 物件
             ps_proc = None
             if psutil is not None:
                 with contextlib.suppress(psutil.Error, OSError, ValueError):
                     ps_proc = psutil.Process(proc.pid)
-                    ps_proc.cpu_percent(interval=None)  # 預熱
+                    # Prime CPU percentage measurement so subsequent calls return non-zero values
+                    ps_proc.cpu_percent(interval=None)
             script_processes[name] = {
                 "process":    proc,
                 "log_fp":     log_fp,
@@ -849,7 +840,7 @@ def start_script(name):
             state_info["status"] = "RUNNING"
             state_info["pid"] = proc.pid
             state_info["start_time"] = time.time()
-            
+
         plog("START", f"啟動 {BOLD}{name}{RESET}  {GRAY}PID {proc.pid}{RESET}", name)
         return proc
 
@@ -864,11 +855,12 @@ def start_script(name):
 
 
 def stop_script(name):
+    """Stop a running script, escalating to force kill if it does not exit within 5 seconds."""
     with state_lock:
         manual_stop[name] = True
         init_script_state(name)
         state_info = script_states[name]
-        
+
         if state_info["status"] == "STOPPED":
             plog("WARN", f"{name} 並未在執行中", name)
             return False
@@ -884,12 +876,10 @@ def stop_script(name):
 
         proc = entry["process"]
         state_info["status"] = "STOPPING"
-        # 保留 script_processes[name] 供停止期間的狀態追蹤與 wait 安全
 
     plog("STOP", f"正在停止 {BOLD}{name}{RESET}…", name)
 
     try:
-        # 使用進程樹強殺機制避免 Windows ffmpeg 等子進程殘留
         kill_process_tree(proc)
 
         try:
@@ -947,9 +937,6 @@ def _fmt_uptime(seconds):
     if m:   return f"{m}m {s}s"
     return f"{s}s"
 
-# ══════════════════════════════════════════════════════════════
-#  STATUS DISPLAY
-# ══════════════════════════════════════════════════════════════
 
 def status():
     w = 72
@@ -978,7 +965,7 @@ def status():
         with state_lock:
             init_script_state(name)
             state_info = script_states[name]
-        
+
         status_now = state_info["status"]
         enabled = conf.get("enabled", True)
 
@@ -994,7 +981,7 @@ def status():
             up_str  = _fmt_uptime(elapsed)
             status_str = f"{rgb(100,255,160)}{BOLD}● 運行中{RESET}"
             pid_str    = str(pid)
-            
+
             if psutil is not None:
                 cpu, mem = get_process_stats(name)
                 cpu_str = f"{cpu}%"
@@ -1014,7 +1001,7 @@ def status():
             cpu_str    = "-"
             mem_str    = "-"
             up_str     = "-"
-        else: # STOPPED
+        else:
             status_str = f"{rgb(255,100,100)}{BOLD}● 已停止{RESET}"
             pid_str    = "-"
             cpu_str    = "-"
@@ -1023,7 +1010,7 @@ def status():
 
         rc_str = f"{state_info['restart_count']}/{state_info['crash_count']}"
         name_col = gradient_text(name, (200, 180, 255), (160, 220, 255))
-        
+
         name_part   = align_text(name_col, 10)
         status_part = align_text(status_str, 11)
         pid_part    = align_text(pid_str, 7)
@@ -1038,10 +1025,6 @@ def status():
     print(f"{border}{BOLD}{'═'*w}{RESET}")
     print()
 
-
-# ══════════════════════════════════════════════════════════════
-#  HELP DISPLAY
-# ══════════════════════════════════════════════════════════════
 
 def print_help():
     section_header("可用指令", "◈")
@@ -1072,11 +1055,9 @@ def print_help():
         print(f"  {key_color}{BOLD}{cmd:<22}{RESET}  {desc_color}{desc}{RESET}")
     print()
 
-# ══════════════════════════════════════════════════════════════
-#  COMMAND HANDLER
-# ══════════════════════════════════════════════════════════════
 
 PROMPT = f"\n{rgb(200,150,255)}{BOLD}❯{RESET} "
+
 
 def _monitor_loop():
     while is_monitoring and running:
@@ -1091,7 +1072,9 @@ def _monitor_loop():
 
         time.sleep(1)
 
+
 def console_listener():
+    """Interactive CLI loop for processing user commands."""
     global running, is_monitoring, is_prompting
     while True:
         try:
@@ -1109,11 +1092,9 @@ def console_listener():
         parts = cmdline.split()
         cmd   = parts[0].lower()
 
-        # ── 說明 ──────────────────────────────────────
         if cmd == "help":
             print_help()
 
-        # ── 列出 ──────────────────────────────────────
         elif cmd == "scripts":
             section_header("腳本設定列表", "◈")
             with state_lock:
@@ -1124,11 +1105,9 @@ def console_listener():
                 print(f"  {BOLD}{name:<10}{RESET} {tag}")
             print()
 
-        # ── 狀態 ──────────────────────────────────────
         elif cmd == "status":
             status()
 
-        # ── 即時監控 (自動更新) ────────────────────────
         elif cmd == "monitor":
             is_monitoring = True
             clear_screen()
@@ -1146,19 +1125,16 @@ def console_listener():
                 print_banner()
                 status()
 
-        # ── 清除 ──────────────────────────────────────
         elif cmd == "clear":
             clear_screen()
             print_banner()
 
-        # ── 退出 ──────────────────────────────────────
         elif cmd == "exit":
             running = False
             print()
             plog("SYS", "收到 exit 指令，開始關閉…")
             break
 
-        # ── 全部啟動 ──────────────────────────────────
         elif cmd == "startall":
             section_header("啟動全部腳本", "▶")
             with state_lock:
@@ -1166,7 +1142,6 @@ def console_listener():
             for name in names:
                 start_script(name)
 
-        # ── 全部停止 ──────────────────────────────────
         elif cmd == "stopall":
             section_header("停止全部腳本", "■")
             with state_lock:
@@ -1174,7 +1149,6 @@ def console_listener():
             for name in names:
                 stop_script(name)
 
-        # ── 查看 log ──────────────────────────────────
         elif cmd == "log":
             if len(parts) < 2:
                 plog("WARN", "用法：log <name> [行數]")
@@ -1193,7 +1167,6 @@ def console_listener():
                 print(f"  {GRAY}│{RESET} {format_log_line(ln)}")
             print(f"  {GRAY}└{'─'*50}{RESET}\n")
 
-        # ── 即時監聽 ──────────────────────────────────
         elif cmd == "listen":
             if len(parts) < 3:
                 plog("WARN", "用法：listen <name> on/off")
@@ -1226,11 +1199,9 @@ def console_listener():
             else:
                 plog("WARN", "listen 第二個參數須為 on 或 off")
 
-        # ── 新增設定 ───────────────────────────────────
         elif cmd == "add":
             interactive_add()
 
-        # ── 編輯設定 ───────────────────────────────────
         elif cmd == "edit":
             if len(parts) < 2:
                 plog("WARN", "用法：edit <name>")
@@ -1238,7 +1209,6 @@ def console_listener():
             script_name = parts[1]
             interactive_edit(script_name)
 
-        # ── 刪除設定 ───────────────────────────────────
         elif cmd == "remove":
             if len(parts) < 2:
                 plog("WARN", "用法：remove <name>")
@@ -1249,20 +1219,20 @@ def console_listener():
             if not exists:
                 plog("ERROR", f"找不到腳本設定：{script_name}")
                 continue
-            
+
             is_running = False
             with state_lock:
                 entry = script_processes.get(script_name)
                 if entry and entry["process"].poll() is None:
                     is_running = True
-            
+
             if is_running:
                 confirm = input(f"腳本 {script_name} 正在執行中，刪除前需要先停止它，是否繼續？(y/n): ").strip().lower()
                 if confirm != 'y':
                     plog("INFO", "已取消刪除。")
                     continue
                 stop_script(script_name)
-            
+
             with state_lock:
                 SCRIPT_CONFIGS.pop(script_name, None)
                 script_processes.pop(script_name, None)
@@ -1274,7 +1244,6 @@ def console_listener():
             save_configs()
             plog("OK", f"成功刪除腳本設定：{script_name}")
 
-        # ── 啟用/停用設定 ──────────────────────────────
         elif cmd in ("enable", "disable"):
             if len(parts) < 2:
                 plog("WARN", f"用法：{cmd} <name>")
@@ -1290,7 +1259,6 @@ def console_listener():
             save_configs()
             plog("OK", f"已設定 {script_name} 為 {'啟用' if cmd == 'enable' else '停用'}")
 
-        # ── 顯示詳細設定 ──────────────────────────────
         elif cmd == "config":
             section_header("腳本詳細設定", "⚙")
             with state_lock:
@@ -1308,7 +1276,6 @@ def console_listener():
                     print(f"    {GRAY}環境變數:{RESET} {env_str}")
             print()
 
-        # ── 單個操作 ───────────────────────────────────
         elif cmd in ("start", "stop", "restart"):
             if len(parts) < 2:
                 plog("WARN", f"用法：{cmd} <name>")
@@ -1339,46 +1306,46 @@ def graceful_shutdown():
 
 
 def watchdog():
-    """監控所有腳本崩潰並自動重啟，以及偵測設定熱更新。"""
+    """Background loop for config hot-reloading and automatic crash recovery."""
     global config_last_mtime
-    
+
     with contextlib.suppress(OSError):
         if CONFIG_PATH.exists():
             config_last_mtime = CONFIG_PATH.stat().st_mtime
 
     while running:
         time.sleep(2)
-        
-        # 1. 熱重載設定檔
+
+        # Hot-reload configuration file when modified on disk
         try:
             if CONFIG_PATH.exists():
                 mtime = CONFIG_PATH.stat().st_mtime
                 if mtime != config_last_mtime:
                     config_last_mtime = mtime
                     plog("SYS", "偵測到設定檔變更，正在進行熱重載...")
-                    
+
                     with state_lock:
                         old_scripts = set(SCRIPT_CONFIGS.keys())
-                    
+
                     load_configs()
-                    
+
                     with state_lock:
                         new_scripts = set(SCRIPT_CONFIGS.keys())
-                        
+
                     removed_scripts = old_scripts - new_scripts
                     for name in removed_scripts:
                         plog("SYS", f"設定已移除腳本：{name}，正在停止進程...", name)
                         stop_script(name)
                         with state_lock:
                             script_states.pop(name, None)
-                                
+
                     for name in new_scripts:
                         with state_lock:
                             conf = SCRIPT_CONFIGS.get(name)
                             enabled = conf.get("enabled", True) if conf else False
                             init_script_state(name)
                             status_now = script_states[name]["status"]
-                            
+
                         if status_now == "RUNNING" and not enabled:
                             plog("SYS", f"腳本 {name} 已在設定檔中被停用，正在停止進程...", name)
                             stop_script(name)
@@ -1391,10 +1358,10 @@ def watchdog():
         except (OSError, ValueError, TypeError, subprocess.SubprocessError) as e:
             plog("ERROR", f"熱重載設定檔失敗：{e}")
 
-        # 2. 崩潰偵測與重啟
+        # Detect exited processes and auto-restart if configured
         with state_lock:
             script_names = list(SCRIPT_CONFIGS.keys())
-            
+
         for name in script_names:
             with state_lock:
                 entry = script_processes.get(name)
@@ -1402,7 +1369,7 @@ def watchdog():
                 state_info = script_states[name]
                 if state_info["status"] == "STOPPING":
                     continue
-                
+
             if not entry:
                 continue
 
@@ -1439,7 +1406,7 @@ def watchdog():
             with state_lock:
                 conf = SCRIPT_CONFIGS.get(name)
                 auto_restart = conf.get("auto_restart", True) if conf else True
-                
+
             if auto_restart and not is_restart_limited(name):
                 plog("RESTART", f"自動重啟 {BOLD}{name}{RESET}…", name)
                 time.sleep(1)
@@ -1447,43 +1414,33 @@ def watchdog():
                     script_states[name]["restart_count"] += 1
                 start_script(name)
 
-# ══════════════════════════════════════════════════════════════
-#  MAIN
-# ══════════════════════════════════════════════════════════════
 
 def main():
     clear_screen()
     print_banner()
 
-    # 載入設定檔
     load_configs()
 
     plog("SYS",  f"{PROJECT_NAME} 啟動  Python {sys.version.split()[0]}")
     plog("SYS",  f"Log 目錄：{LOG_BASE}")
     print()
 
-    # 啟動所有啟用的腳本
     section_header("初始化腳本", "▶")
     for name in SCRIPT_CONFIGS:
         start_script(name)
     print()
 
-    # 顯示初始狀態
     status()
 
-    # 啟動 watchdog 執行緒
     wd = threading.Thread(target=watchdog, daemon=True)
     wd.start()
 
-    # 啟動指令監聽執行緒
     cli = threading.Thread(target=console_listener, daemon=True)
     cli.start()
     cli.join()
 
     graceful_shutdown()
 
-
-# ══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     try:
@@ -1492,4 +1449,3 @@ if __name__ == "__main__":
         print()
         plog("SYS", "收到 Ctrl+C / Pterodactyl STOP 訊號")
         graceful_shutdown()
-
